@@ -26,6 +26,7 @@ if "teacher" not in st.session_state:
 # =====================================================
 teachers_file = "teachers.csv"
 history_file = "prediction_history.csv"
+dataset_file = "student_performance.csv"
 
 # =====================================================
 # LOAD / CREATE TEACHERS
@@ -55,6 +56,33 @@ except:
     history_df.to_csv(history_file, index=False)
 
 # =====================================================
+# LOAD DATASET SAFELY
+# =====================================================
+try:
+    data = pd.read_csv(dataset_file)
+except:
+    st.error("❌ student_performance.csv not found. Please upload it.")
+    st.stop()
+
+# =====================================================
+# MODEL TRAINING (SAFE)
+# =====================================================
+X = data[['study_hours', 'attendance', 'previous_marks', 'assignments']]
+y_marks = data['final_marks']
+
+X_train, _, y_train, _ = train_test_split(
+    X, y_marks, test_size=0.2, random_state=42
+)
+
+lr_model = LinearRegression()
+lr_model.fit(X_train, y_train)
+
+data['pass_fail'] = data['final_marks'].apply(lambda x: 1 if x >= 50 else 0)
+
+log_model = LogisticRegression(max_iter=1000)
+log_model.fit(X, data['pass_fail'])
+
+# =====================================================
 # SIDEBAR STYLE
 # =====================================================
 st.markdown("""
@@ -68,9 +96,6 @@ st.markdown("""
     padding: 16px;
     border-radius: 14px;
     margin-bottom: 16px;
-}
-.profile-card h3 {
-    margin-bottom: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -128,7 +153,6 @@ else:
     teacher = st.session_state.teacher
     username = teacher["username"]
 
-    # ---------------- SIDEBAR PROFILE ----------------
     st.sidebar.markdown(f"""
     <div class="profile-card">
         <h3>👩‍🏫 Teacher Profile</h3>
@@ -148,26 +172,7 @@ else:
         st.session_state.teacher = None
         st.rerun()
 
-    # ---------------- LOAD DATASET ----------------
-    data = pd.read_csv("student_performance.csv")
-
-    X = data[['study_hours', 'attendance', 'previous_marks', 'assignments']]
-    y_marks = data['final_marks']
-
-    X_train, _, y_train, _ = train_test_split(
-        X, y_marks, test_size=0.2, random_state=42
-    )
-
-    lr_model = LinearRegression()
-    lr_model.fit(X_train, y_train)
-
-    data['pass_fail'] = data['final_marks'].apply(lambda x: 1 if x >= 50 else 0)
-    log_model = LogisticRegression()
-    log_model.fit(X, data['pass_fail'])
-
-    # =====================================================
-    # DASHBOARD
-    # =====================================================
+    # ================= DASHBOARD =================
     if page == "Dashboard":
         st.title("📊 Teacher Dashboard")
 
@@ -181,14 +186,11 @@ else:
         col3.metric("❌ Fail", len(teacher_history[teacher_history["result"] == "FAIL"]))
 
         if not teacher_history.empty:
-            st.subheader("📉 Marks Trend")
             st.line_chart(teacher_history["predicted_marks"])
         else:
             st.info("No predictions yet.")
 
-    # =====================================================
-    # PREDICTION PAGE
-    # =====================================================
+    # ================= PREDICT =================
     if page == "Predict Marks":
         st.title("🎯 Predict Student Result")
 
@@ -221,9 +223,7 @@ else:
             history_df = pd.concat([history_df, new_entry], ignore_index=True)
             history_df.to_csv(history_file, index=False)
 
-    # =====================================================
-    # HISTORY PAGE
-    # =====================================================
+    # ================= HISTORY =================
     if page == "Prediction History":
         st.title("🧾 Prediction History")
 
